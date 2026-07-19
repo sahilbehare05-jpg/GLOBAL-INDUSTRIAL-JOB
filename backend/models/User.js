@@ -7,6 +7,10 @@ const userSchema = new mongoose.Schema(
     email: { type: String, required: true, unique: true, lowercase: true, trim: true },
     password: { type: String, required: true },
     role: { type: String, enum: ["user", "admin"], default: "user" },
+    pushToken: {
+  type: String,
+  default: "",
+},
     purchasedNotices: [{ type: mongoose.Schema.Types.ObjectId, ref: "Notice" }],
   },
   { timestamps: true }
