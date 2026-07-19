@@ -11,51 +11,129 @@ const generateToken = (id) => {
 // @route POST /api/auth/register
 const registerUser = async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, mobile, password } = req.body;
 
-    if (!name || !email || !password) {
-      return res.status(400).json({ message: "Please fill all fields" });
+    // New registrations require all 4 fields
+    if (!name || !email || !mobile || !password) {
+      return res.status(400).json({
+        message: "Please fill all fields",
+      });
     }
 
-    const userExists = await User.findOne({ email });
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanMobile = mobile.replace(/\D/g, "");
+
+    // Basic 10-digit Indian mobile validation
+    if (!/^[6-9]\d{9}$/.test(cleanMobile)) {
+      return res.status(400).json({
+        message: "Please enter a valid 10-digit mobile number",
+      });
+    }
+
+    // Check duplicate email OR mobile
+    const userExists = await User.findOne({
+      $or: [
+        { email: cleanEmail },
+        { mobile: cleanMobile },
+      ],
+    });
+
     if (userExists) {
-      return res.status(400).json({ message: "User already exists" });
+      if (userExists.email === cleanEmail) {
+        return res.status(400).json({
+          message: "Email already registered",
+        });
+      }
+
+      return res.status(400).json({
+        message: "Mobile number already registered",
+      });
     }
 
-    const user = await User.create({ name, email, password, role: "user" });
+    const user = await User.create({
+      name: name.trim(),
+      email: cleanEmail,
+      mobile: cleanMobile,
+      password,
+      role: "user",
+    });
 
     res.status(201).json({
       _id: user._id,
       name: user.name,
       email: user.email,
+      mobile: user.mobile,
       role: user.role,
       token: generateToken(user._id),
     });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error("REGISTER ERROR:", error);
+
+    // Duplicate index protection
+    if (error.code === 11000) {
+      return res.status(400).json({
+        message: "Email or mobile number already registered",
+      });
+    }
+
+    res.status(500).json({
+      message: error.message,
+    });
   }
 };
 
-// @desc Login user or admin
+// @desc Login using email OR mobile number
 // @route POST /api/auth/login
 const loginUser = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, identifier, password } = req.body;
 
-    const user = await User.findOne({ email });
+    // Supports new frontend "identifier"
+    // and old frontend "email" for backward compatibility
+    const loginValue = String(identifier || email || "").trim();
+
+    if (!loginValue || !password) {
+      return res.status(400).json({
+        message: "Please enter email/mobile number and password",
+      });
+    }
+
+    let user;
+
+    // If input looks like an email
+    if (loginValue.includes("@")) {
+      user = await User.findOne({
+        email: loginValue.toLowerCase(),
+      });
+    } else {
+      // Otherwise treat it as mobile number
+      const cleanMobile = loginValue.replace(/\D/g, "");
+
+      user = await User.findOne({
+        mobile: cleanMobile,
+      });
+    }
+
     if (!user || !(await user.matchPassword(password))) {
-      return res.status(401).json({ message: "Invalid email or password" });
+      return res.status(401).json({
+        message: "Invalid email/mobile number or password",
+      });
     }
 
     res.json({
       _id: user._id,
       name: user.name,
       email: user.email,
+      mobile: user.mobile || "",
       role: user.role,
       token: generateToken(user._id),
     });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    console.error("LOGIN ERROR:", error);
+
+    res.status(500).json({
+      message: error.message,
+    });
   }
 };
 
@@ -67,10 +145,23 @@ const getProfile = async (req, res) => {
       "purchasedNotices",
       "title category isPremium"
     );
+
+    if (!user) {
+      return res.status(404).json({
+        message: "User not found",
+      });
+    }
+
     res.json(user);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    res.status(500).json({
+      message: error.message,
+    });
   }
 };
 
-module.exports = { registerUser, loginUser, getProfile };
+module.exports = {
+  registerUser,
+  loginUser,
+  getProfile,
+};
