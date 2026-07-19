@@ -10,7 +10,7 @@ const noticeSchema = new mongoose.Schema(
     isPremium: { type: Boolean, default: false },
     price: { type: Number, default: 99 },
     imageUrl: { type: String, default: "" },
-    isPublished: { type: Boolean, default: false },
+    isPublished: { type: Boolean, default: true },
   },
   { timestamps: true }
 );
