@@ -69,15 +69,16 @@ const createNotice = async (req, res) => {
     const imageUrl = req.file ? `/uploads/${req.file.filename}` : "";
 
     const notice = await Notice.create({
-      title,
-      shortDescription,
-      fullInformation,
-      category,
-      isPremium: isPremium === "true" || isPremium === true,
-      price: price || 99,
-      date: date || Date.now(),
-      imageUrl,
-    });
+  title,
+  shortDescription,
+  fullInformation,
+  category,
+  isPremium: isPremium === "true" || isPremium === true,
+  price: price || 99,
+  date: date || Date.now(),
+  imageUrl,
+  isPublished: true,
+});
 
     res.status(201).json(notice);
   } catch (error) {
