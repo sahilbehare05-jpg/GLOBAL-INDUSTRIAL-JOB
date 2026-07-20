@@ -7,52 +7,48 @@ const generateToken = (id) => {
   });
 };
 
-// @desc Register new user
+// @desc Register new user using mobile number
 // @route POST /api/auth/register
 const registerUser = async (req, res) => {
   try {
-    const { name, email, mobile, password } = req.body;
+    const { name, mobile, password } = req.body;
 
-    // New registrations require all 4 fields
-    if (!name || !email || !mobile || !password) {
+    // Name + Mobile + Password required
+    if (!name || !mobile || !password) {
       return res.status(400).json({
-        message: "Please fill all fields",
+        message: "Please enter name, mobile number and password",
       });
     }
 
-    const cleanEmail = email.trim().toLowerCase();
-    const cleanMobile = mobile.replace(/\D/g, "");
+    const cleanMobile = String(mobile).replace(/\D/g, "");
 
-    // Basic 10-digit Indian mobile validation
+    // Validate Indian 10-digit mobile number
     if (!/^[6-9]\d{9}$/.test(cleanMobile)) {
       return res.status(400).json({
         message: "Please enter a valid 10-digit mobile number",
       });
     }
 
-    // Check duplicate email OR mobile
+    if (password.length < 6) {
+      return res.status(400).json({
+        message: "Password must be at least 6 characters",
+      });
+    }
+
+    // Check duplicate mobile number
     const userExists = await User.findOne({
-      $or: [
-        { email: cleanEmail },
-        { mobile: cleanMobile },
-      ],
+      mobile: cleanMobile,
     });
 
     if (userExists) {
-      if (userExists.email === cleanEmail) {
-        return res.status(400).json({
-          message: "Email already registered",
-        });
-      }
-
       return res.status(400).json({
         message: "Mobile number already registered",
       });
     }
 
+    // Create user WITHOUT email
     const user = await User.create({
       name: name.trim(),
-      email: cleanEmail,
       mobile: cleanMobile,
       password,
       role: "user",
@@ -61,7 +57,6 @@ const registerUser = async (req, res) => {
     res.status(201).json({
       _id: user._id,
       name: user.name,
-      email: user.email,
       mobile: user.mobile,
       role: user.role,
       token: generateToken(user._id),
@@ -69,10 +64,9 @@ const registerUser = async (req, res) => {
   } catch (error) {
     console.error("REGISTER ERROR:", error);
 
-    // Duplicate index protection
     if (error.code === 11000) {
       return res.status(400).json({
-        message: "Email or mobile number already registered",
+        message: "Mobile number already registered",
       });
     }
 
@@ -82,32 +76,43 @@ const registerUser = async (req, res) => {
   }
 };
 
-// @desc Login using email OR mobile number
+// @desc Login user with mobile number
+// Existing admin email login remains supported
 // @route POST /api/auth/login
 const loginUser = async (req, res) => {
   try {
-    const { email, identifier, password } = req.body;
+    const { mobile, identifier, email, password } = req.body;
 
-    // Supports new frontend "identifier"
-    // and old frontend "email" for backward compatibility
-    const loginValue = String(identifier || email || "").trim();
+    // Supports:
+    // New app -> mobile
+    // Previous app -> identifier
+    // Existing admin -> email
+    const loginValue = String(
+      mobile || identifier || email || ""
+    ).trim();
 
     if (!loginValue || !password) {
       return res.status(400).json({
-        message: "Please enter email/mobile number and password",
+        message: "Please enter mobile number and password",
       });
     }
 
     let user;
 
-    // If input looks like an email
+    // Keep existing ADMIN email login working
     if (loginValue.includes("@")) {
       user = await User.findOne({
         email: loginValue.toLowerCase(),
+        role: "admin",
       });
     } else {
-      // Otherwise treat it as mobile number
       const cleanMobile = loginValue.replace(/\D/g, "");
+
+      if (!/^[6-9]\d{9}$/.test(cleanMobile)) {
+        return res.status(400).json({
+          message: "Please enter a valid 10-digit mobile number",
+        });
+      }
 
       user = await User.findOne({
         mobile: cleanMobile,
@@ -116,15 +121,15 @@ const loginUser = async (req, res) => {
 
     if (!user || !(await user.matchPassword(password))) {
       return res.status(401).json({
-        message: "Invalid email/mobile number or password",
+        message: "Invalid mobile number or password",
       });
     }
 
     res.json({
       _id: user._id,
       name: user.name,
-      email: user.email,
       mobile: user.mobile || "",
+      email: user.email || "",
       role: user.role,
       token: generateToken(user._id),
     });

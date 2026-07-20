@@ -9,14 +9,16 @@ const userSchema = new mongoose.Schema(
       trim: true,
     },
 
+    // Kept optional for existing admin/old accounts
     email: {
       type: String,
-      required: true,
       unique: true,
+      sparse: true,
       lowercase: true,
       trim: true,
     },
 
+    // New users register/login using mobile number
     mobile: {
       type: String,
       unique: true,
